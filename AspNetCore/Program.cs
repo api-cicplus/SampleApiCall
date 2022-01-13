@@ -19,22 +19,24 @@ namespace CicPlus.Api.Samples
 
             var samples = GetSamples();
 
-            if (samples != null && samples.Count > 0)
+            if (samples == null || samples.Count == 0)
             {
-                Console.WriteLine("Pay Statement Samples:");
-
-                foreach (PayStatementSample sample in samples)
-                {
-                    Console.WriteLine("Name: " + sample.Name);
-                    Console.WriteLine("Description: " + sample.Description);
-                    Console.WriteLine("~");
-                }
+                Console.WriteLine("No Pay Statement Samples found");
+                return;
             }
 
-            string sampleName = "[SAMPLE NAME]";
+            Console.WriteLine("Pay Statement Samples:");
+            foreach (PayStatementSample sample in samples)
+            {
+                Console.WriteLine("Name: " + sample.Name);
+                Console.WriteLine("Description: " + sample.Description);
+                Console.WriteLine("~");
+            }
+
+            string sampleName = samples[0].Name;
             var result = GetSamplePayStatement(sampleName);
 
-            if(result != null)
+            if (result != null)
             {
                 string path = "c:/" + sampleName + ".pdf";
 
@@ -48,27 +50,32 @@ namespace CicPlus.Api.Samples
             IRestClient client = new RestClient();
 
             string authorizationEndPoint = config["AuthorizationServiceEndPoint"];
-            var endpoint = string.Concat(authorizationEndPoint, "/api/authorize/token");
+            var endpoint = string.Concat(authorizationEndPoint, "/api/v1/authorize/token");
 
             client.BaseUrl = new Uri(endpoint);
-            IRestRequest req = new RestRequest(endpoint, Method.GET);
+            IRestRequest req = new RestRequest(endpoint, Method.POST);
 
-            req.AddParameter("userName", userName);
-            req.AddParameter("userPassword", userPassword);
-            req.AddParameter("companyUrlSuffix", companyUrlSuffix);
+            var userSignIn = new UserSignInModel
+            {
+                UserName = userName,
+                Password = userPassword,
+                CompanyUrlSuffix = companyUrlSuffix
+            };
 
-            IRestResponse<string> response = client.Execute<string>(req);
+            req.AddJsonBody(JsonConvert.SerializeObject(userSignIn));
 
-            return response.Data;
+            IRestResponse<ApiResponse> response = client.Execute<ApiResponse>(req);
+
+            var result = JsonConvert.DeserializeObject<ApiResponse>(response.Content);
+            return result?.Data as string;
         }
+
         public static List<PayStatementSample> GetSamples()
         {
-            List<PayStatementSample> result = new List<PayStatementSample>();
-
             IRestClient client = new RestClient();
 
             string payStatementServiceEndPoint = config["PayStatementServiceEndPoint"];
-            var endpoint = string.Concat(payStatementServiceEndPoint, "/api/PayStatement/samples");
+            var endpoint = string.Concat(payStatementServiceEndPoint, "/api/v1/paystatement/admin/samples");
 
             client.BaseUrl = new Uri(endpoint);
             IRestRequest req = new RestRequest(endpoint, Method.GET);
@@ -78,8 +85,8 @@ namespace CicPlus.Api.Samples
 
             if (response.IsSuccessful)
             {
-                result = JsonConvert.DeserializeObject<List<PayStatementSample>>(response.Content);
-                return result;
+                var result = JsonConvert.DeserializeObject<ApiResponse>(response.Content);
+                return JsonConvert.DeserializeObject<List<PayStatementSample>>(result?.Data?.ToString() ?? string.Empty);
             }
             else
             {
@@ -93,7 +100,7 @@ namespace CicPlus.Api.Samples
             IRestClient client = new RestClient();
 
             string payStatementServiceEndPoint = config["PayStatementServiceEndPoint"];
-            var endpoint = string.Concat(payStatementServiceEndPoint, "/api/PayStatement/samples/pdf");
+            var endpoint = string.Concat(payStatementServiceEndPoint, "/api/v1/paystatement/admin/samples/pdf");
 
             client.BaseUrl = new Uri(endpoint);
             IRestRequest req = new RestRequest(endpoint, Method.GET);
@@ -102,7 +109,7 @@ namespace CicPlus.Api.Samples
 
             IRestResponse response = client.Execute(req);
 
-            if(response.IsSuccessful)
+            if (response.IsSuccessful)
             {
                 return response.RawBytes;
             }
@@ -112,6 +119,22 @@ namespace CicPlus.Api.Samples
                 return null;
             }
         }
+
+        public class UserSignInModel
+        {
+            public string UserName { get; set; }
+            public string Password { get; set; }
+            public string CompanyUrlSuffix { get; set; }
+
+        }
+
+        public class ApiResponse
+        {
+            public bool Success { get; set; }
+            public string Message { get; set; }
+            public object Data { get; set; }
+        }
+
         public class PayStatementSample
         {
             public string Name { get; set; }
